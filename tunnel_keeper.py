@@ -34,7 +34,11 @@ LOG = HERE / "data" / "tunnel" / "keeper.log"
 URL_FILE = HERE / "data" / "tunnel" / "current_url.txt"
 CHECK_EVERY = 60          # seconds between probes
 GRACE = 90                # seconds to let a new tunnel come up
-URL_RE = re.compile(rb"https://[a-z0-9-]+\.trycloudflare\.com")
+# cloudflared logs its own control-plane host, https://api.trycloudflare.com, BEFORE
+# the hostname it is assigned. Matching the first hit therefore published the API
+# endpoint as the public URL — and because that host answers 200, alive() called it
+# healthy forever while the real tunnel was dead. Exclude it explicitly.
+URL_RE = re.compile(rb"https://(?!api\.)[a-z0-9-]+\.trycloudflare\.com")
 
 
 def log(msg):
@@ -58,11 +62,16 @@ def publish(url):
 
 
 def alive(url, timeout=15):
+    """True only if OUR app answers. A 200 from something else is not our tunnel."""
     if not url:
         return False
     try:
         with urllib.request.urlopen(url.rstrip("/") + "/health", timeout=timeout) as r:
-            return r.status == 200
+            if r.status != 200:
+                return False
+            # /health returns {"ok":true,...}. Checking the body, not just the status,
+            # is what stops a stray host from passing as a working tunnel.
+            return b'"ok"' in r.read(4096)
     except Exception:                                         # noqa: BLE001
         return False
 
