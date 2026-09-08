@@ -1,0 +1,29 @@
+# Public read-only mirror of the T&C Laser Command Center.
+# The collector stays on the factory PC — Render cannot reach 10.100.x.x.
+services:
+  - type: web
+    name: tc-laser-mirror
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health          # no auth, already in main.py
+    envVars:
+      - key: LASER_ROLE
+        value: mirror
+      - key: LASER_DATA
+        value: /data
+      # Shared secret with the on-prem pusher. Fails CLOSED: unset accepts nothing.
+      #   python -c "import secrets;print(secrets.token_urlsafe(32))"
+      - key: LASER_MIRROR_TOKEN
+        sync: false
+      # Only encrypts sessions here — password_enc is never mirrored, so there is
+      # nothing to decrypt. NEVER paste the factory's data/secret.key in.
+      - key: LASER_SECRET_KEY
+        sync: false
+      # The disk is ephemeral; without this the admin password is randomised on
+      # every redeploy and only visible in the Render log.
+      - key: LASER_ADMIN_PASSWORD
+        sync: false
+# No disk: on the free plan it is ephemeral anyway, and a wipe is repaired by the
+# next 60 s push. That same push is inbound traffic, so the service never idles down.

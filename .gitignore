@@ -1,0 +1,23 @@
+# SAFETY-CRITICAL. Everything below either holds factory credentials or is far too
+# large for a repo. data/ alone is 670 MB and contains secret.key, the Fernet key that
+# decrypts every machine password, plus 112 cached copies of the machines' own SQLite
+# files and the public tunnel URL.
+data/
+*.db
+*.db-wal
+*.db-shm
+*.key
+*.log
+
+# Legacy seeds. They live one level above the repo (../machines.json, ../central.db)
+# so a build context rooted here already excludes them — listed in case anyone copies
+# them in "for convenience". machines.json is 26 factory IPs and share names.
+machines.json
+central.db
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.DS_Store
