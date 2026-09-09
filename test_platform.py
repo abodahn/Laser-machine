@@ -4,6 +4,7 @@ Uses a throwaway database so it never touches production data.
 """
 import datetime as dt
 import os
+import pathlib
 import sys
 import tempfile
 
@@ -302,6 +303,40 @@ def t_collector_thread_leak_bounded():
         assert ok == [1], "a healthy machine was starved while another was stuck"
     finally:
         release.set()
+
+
+def t_tunnel_health_check_routing():
+    """alive() must only send trycloudflare hostnames down the anycast path.
+
+    The same function decides whether the LOCAL platform is up. Routing
+    127.0.0.1 to Cloudflare made the keeper declare the running service dead
+    and refuse to maintain the tunnel at all.
+    """
+    import importlib.util
+    import socket
+
+    spec = importlib.util.spec_from_file_location(
+        "tunnel_keeper", str(pathlib.Path(__file__).resolve().parent / "tunnel_keeper.py"))
+    tk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tk)
+
+    asked = []
+    real = socket.gethostbyname
+
+    def spy(name):
+        asked.append(name)
+        return real(name)
+
+    socket.gethostbyname = spy
+    try:
+        tk.alive("http://127.0.0.1:1")          # closed port: result is False either way
+        assert "trycloudflare.com" not in asked, (
+            "a non-tunnel host was routed through the Cloudflare anycast path")
+        tk.alive("https://made-up-name-xyz.trycloudflare.com")
+        assert "trycloudflare.com" in asked, (
+            "a tunnel host did not use the anycast path and will fail on a filtered resolver")
+    finally:
+        socket.gethostbyname = real
 
 
 if __name__ == "__main__":

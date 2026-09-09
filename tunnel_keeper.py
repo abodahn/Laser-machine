@@ -83,10 +83,15 @@ def alive(url, timeout=15):
     if not url:
         return False
     host = url.split("://", 1)[-1].rstrip("/")
-    try:
-        addr = socket.gethostbyname("trycloudflare.com")
-    except OSError:
-        addr = None
+    # The anycast trick below is ONLY valid for quick-tunnel hostnames. This same
+    # function also probes http://127.0.0.1:8800 to decide whether the platform is
+    # up, and sending that to Cloudflare declared the local service dead.
+    addr = None
+    if host.endswith(".trycloudflare.com"):
+        try:
+            addr = socket.gethostbyname("trycloudflare.com")
+        except OSError:
+            addr = None
     if addr:
         try:
             ctx = ssl.create_default_context()
