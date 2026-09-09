@@ -20,6 +20,8 @@ Run as a service; it never exits.
 import os
 import pathlib
 import re
+import socket
+import ssl
 import subprocess
 import sys
 import time
@@ -62,16 +64,54 @@ def publish(url):
 
 
 def alive(url, timeout=15):
-    """True only if OUR app answers. A 200 from something else is not our tunnel."""
+    """True only if OUR app answers, checked WITHOUT the factory DNS server.
+
+    The plant resolver (10.100.1.1) answers NXDOMAIN for every *.trycloudflare.com
+    hostname while resolving the apex normally — deliberate filtering, because quick
+    tunnels are a routine way around network controls. So this PC cannot resolve the
+    tunnel it just created, even though the tunnel works fine for everyone outside.
+
+    Resolving through it meant every probe failed, three failures rebuilt the tunnel,
+    and the rebuild produced another name that would not resolve either: 31 rebuilds
+    in one day, a new public URL every few minutes, and never a link worth sharing.
+    The tunnel was never the broken part.
+
+    Every quick tunnel is served by the same Cloudflare anycast addresses as the apex,
+    and the apex DOES resolve here — so connect to that address and carry the real
+    hostname in SNI and Host. No dependency on the filtered lookup.
+    """
     if not url:
         return False
+    host = url.split("://", 1)[-1].rstrip("/")
+    try:
+        addr = socket.gethostbyname("trycloudflare.com")
+    except OSError:
+        addr = None
+    if addr:
+        try:
+            ctx = ssl.create_default_context()
+            with socket.create_connection((addr, 443), timeout=timeout) as raw:
+                with ctx.wrap_socket(raw, server_hostname=host) as tls:
+                    crlf = chr(13) + chr(10)
+                    req = ("GET /health HTTP/1.1" + crlf +
+                           "Host: " + host + crlf +
+                           "Connection: close" + crlf + crlf)
+                    tls.sendall(req.encode())
+                    buf = b""
+                    while len(buf) < 8192:
+                        chunk = tls.recv(4096)
+                        if not chunk:
+                            break
+                        buf += chunk
+            status_line = buf.split(crlf.encode(), 1)[0]
+            return b" 200 " in status_line + b" " and b'"ok"' in buf
+        except Exception:                                     # noqa: BLE001
+            return False
+    # ponytail: no anycast address to borrow — fall back to the plain lookup, which
+    # works anywhere the resolver is not filtering. Nothing better without a DoH client.
     try:
         with urllib.request.urlopen(url.rstrip("/") + "/health", timeout=timeout) as r:
-            if r.status != 200:
-                return False
-            # /health returns {"ok":true,...}. Checking the body, not just the status,
-            # is what stops a stray host from passing as a working tunnel.
-            return b'"ok"' in r.read(4096)
+            return r.status == 200 and b'"ok"' in r.read(4096)
     except Exception:                                         # noqa: BLE001
         return False
 
