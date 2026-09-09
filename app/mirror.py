@@ -55,12 +55,27 @@ SLICES = [
     ("machine_optics",   "machine_optics",   "", ()),
     ("downtime",         "downtime", "WHERE production_date >= date(:d,'-90 day')", ()),
     ("state_history",    "state_history", "WHERE start_time >= datetime(:d,'-14 day')", ()),
+    # Accounts follow the machines, so an operator added on the factory PC can sign in
+    # online within one push instead of needing a Render environment variable and a
+    # redeploy for every hire. The mirror refuses POST /api/users, so the collector is
+    # the single source of truth for who exists — which is what read-only should mean.
+    #
+    # 'admin' is deliberately excluded, and apply() deletes by this same WHERE, so the
+    # mirror keeps the break-glass account seeded from LASER_ADMIN_PASSWORD. Without
+    # that exclusion the factory's admin row would overwrite it and lock everyone out
+    # of the public site, because nobody knows the on-prem admin password any more.
+    #
+    # This does put password_hash and salt on public cloud. They are PBKDF2-SHA256 at
+    # 200k iterations with a per-user salt, which is what that is for. It does mean a
+    # weak password is worth as much to an attacker offline as it is at the login form
+    # — so keep online accounts strong.
+    ("users",            "users", "WHERE username <> 'admin'", ()),
 ]
 _BY_NAME = {s[0]: s for s in SLICES}
 
 # NOT mirrored, deliberately: production (871k) and machine_alarms (1.5M) are too big
 # and only feed per-job drill-downs; settings holds the Brevo/WhatsApp/Teams keys;
-# users/sessions/audit_log/connection_log/sync_log are on-prem operational data.
+# sessions/audit_log/connection_log/sync_log are on-prem operational data.
 
 
 def _hash(rows) -> str:
