@@ -2,10 +2,13 @@
 import datetime as dt
 import hashlib
 import hmac
+import logging
 import os
 import secrets
 
 from . import db
+
+log = logging.getLogger("laser.auth")
 
 SESSION_HOURS = 12
 ROLES = ("admin", "manager", "production", "maintenance", "it", "viewer")
@@ -33,6 +36,37 @@ def create_user(username, password, role="viewer", full_name=None, email=None):
           "VALUES(?,?,?,?,?,?,1,?)",
           (username, full_name or username, email, role, h, salt, db.now()))
     return db.q1("SELECT id,username,role FROM users WHERE username=?", (username,))
+
+
+def bootstrap_users():
+    """Create accounts declared in LASER_USERS, as `name:password:role` entries.
+
+    The mirror runs on an ephemeral disk: every redeploy starts from an empty
+    database, so an account added through its UI would silently disappear on the
+    next deploy. Declaring accounts in the environment is the only way one lasts.
+
+    Existing accounts are left alone, so a password changed in the UI survives a
+    restart and is only reset by a deliberate redeploy of an empty mirror.
+    """
+    made = []
+    for entry in os.environ.get("LASER_USERS", "").split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.split(":")
+        if len(parts) < 2:
+            log.warning("LASER_USERS: ignoring %r, expected name:password[:role]", entry)
+            continue
+        name, password = parts[0].strip(), parts[1]
+        role = (parts[2].strip() if len(parts) > 2 else "viewer") or "viewer"
+        if role not in ROLES:
+            log.warning("LASER_USERS: %r has unknown role %r, using viewer", name, role)
+            role = "viewer"
+        if db.q1("SELECT 1 FROM users WHERE username=?", (name,)):
+            continue
+        create_user(name, password, role=role, full_name=name)
+        made.append(f"{name} ({role})")
+    return made
 
 
 def verify(username, password):

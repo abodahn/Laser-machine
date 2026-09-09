@@ -223,6 +223,9 @@ async def lifespan(app: FastAPI):
         log.warning("=" * 68)
         log.warning("ADMIN PASSWORD SET TO: %s   (change it after first login)", pw)
         log.warning("=" * 68)
+    seeded = auth.bootstrap_users()
+    if seeded:
+        log.info("seeded account(s) from LASER_USERS: %s", ", ".join(seeded))
     if config.MIRROR:
         # No loops at all. Beyond being pointless without the LAN, analytics.refresh_all
         # and refresh_deep DELETE design_stats and today's forecasts and rebuild the
