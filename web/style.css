@@ -111,15 +111,19 @@ body.crit-flash #main{animation:critflash 1s ease-in-out infinite}
 .panel{background:linear-gradient(170deg,var(--panel),var(--bg2));border:1px solid var(--line);
   border-radius:var(--radius);margin-bottom:16px;box-shadow:var(--shadow)}
 .panel>h3{padding:12px 16px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600;
-  display:flex;align-items:center;gap:10px}
+  display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap}   /* a .right toolbar must wrap, not overflow */
 .panel>h3 .sub{color:var(--dim);font-weight:400;font-size:11px}
 .panel>h3 .right{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .panel .body{padding:14px 16px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-@media(max-width:1350px){.grid4{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:1150px){.grid2,.grid3{grid-template-columns:1fr}.grid4{grid-template-columns:1fr}}
+/* minmax(0,1fr), never a bare 1fr: `1fr` is shorthand for minmax(auto,1fr), so a
+   track holding a wide table sizes itself to that table's min-content and pushes
+   the whole PAGE sideways instead of letting .tw scroll inside itself. It bit the
+   phone at every width and machine detail at 1440 too. */
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+@media(max-width:1350px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1150px){.grid2,.grid3,.grid4{grid-template-columns:minmax(0,1fr)}}
 
 /* --------------------------------------------------------- machine cards */
 .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:13px}
@@ -188,7 +192,7 @@ label{display:block;font-size:11px;color:var(--muted);margin:9px 0 3px}
 .toolbar input,.toolbar select{width:auto;min-width:120px}
 .hint{color:var(--dim);font-size:11px}
 .right{margin-left:auto}
-.mono{font-family:Consolas,"Courier New",monospace;font-size:11.5px}
+.mono{font-family:Consolas,"Courier New",monospace;font-size:11.5px;overflow-wrap:anywhere}
 .hbar{height:18px;background:rgba(0,0,0,.3);border-radius:4px;overflow:hidden;display:flex}
 .hbar i{display:block;height:100%}
 .chartwrap{width:100%;overflow-x:auto}
@@ -198,14 +202,23 @@ label{display:block;font-size:11px;color:var(--muted);margin:9px 0 3px}
   align-items:center;justify-content:center;z-index:100;padding:20px}
 .modal .box{background:var(--panel);border:1px solid var(--line2);border-radius:14px;max-width:860px;
   width:100%;max-height:90vh;overflow:auto;box-shadow:var(--shadow-lg)}
-.modal .box h3{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;font-size:14px}
+/* direct child only: showModal() bodies can contain a .panel>h3 (the connection
+   test result), and a descendant selector sticks that one at top:0 too, where it
+   sits exactly on the modal's own title. */
+.modal .box>h3{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;font-size:14px;
+  position:sticky;top:0;background:var(--panel);z-index:1}
 .modal .box .body{padding:16px 18px}
-.modal .box .foot{padding:13px 18px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end}
+.modal .box .foot{padding:13px 18px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end;
+  position:sticky;bottom:0;background:var(--panel);flex-wrap:wrap;z-index:1}
 
-#login{display:flex;align-items:center;justify-content:center;height:100vh;
+/* margin:auto, not align/justify-content:center — a centred flex item that is
+   taller than the line overflows BOTH edges and the top half is above scroll
+   origin, so on a 375px-tall landscape phone the 437px box loses its logo and
+   heading with no way to scroll up to them. Auto margins collapse to 0 instead. */
+#login{display:flex;min-height:100vh;padding:16px;
   background:radial-gradient(1100px 600px at 50% -10%,#1a2f57,#070d18)}
 #login .box{background:linear-gradient(170deg,var(--panel2),var(--panel));border:1px solid var(--line2);
-  border-radius:16px;padding:30px;width:360px;box-shadow:var(--shadow-lg)}
+  border-radius:16px;padding:30px;width:360px;max-width:100%;box-shadow:var(--shadow-lg);margin:auto}
 #login .lg{width:52px;height:52px;border-radius:13px;background:var(--grad-accent);display:flex;
   align-items:center;justify-content:center;font-size:27px;margin-bottom:16px;box-shadow:0 6px 20px rgba(62,166,255,.4)}
 #login h2{font-size:19px;margin-bottom:4px}
@@ -352,17 +365,71 @@ body.wall { overflow:hidden; }
   .kpis{grid-template-columns:repeat(auto-fit,minmax(146px,1fr));gap:9px}
   .kpi .v{font-size:22px}
   .mgrid{grid-template-columns:repeat(auto-fill,minmax(100%,1fr))}
-  .grid2,.grid3,.grid4{grid-template-columns:1fr}
+  .grid2,.grid3,.grid4{grid-template-columns:minmax(0,1fr)}
   .panel .body{padding:11px 12px}
   .toolbar{gap:6px}
   .tw{max-height:60vh}
   /* tables scroll sideways rather than crushing every column */
   .tw table{min-width:640px}
   .modal .box{max-height:94vh}
+
+  /* Fingers, not mice: 44px minimum on anything you have to hit, and 16px type
+     on text fields — below 16px iOS Safari zooms the whole page on focus. */
+  button,.btn,select,input,textarea{min-height:44px}
+  .btn{display:inline-flex;align-items:center}   /* an inline <a> ignores min-height */
+  button,.btn{padding:8px 14px}
+  button.sm{padding:8px 12px;font-size:12px}
+  .iconbtn{width:44px;height:44px}
+  input,select,textarea{font-size:16px}
+  /* A checkbox is not a text field. min-height only stretches it vertically, and
+     its width is pinned by an inline style="width:auto" in app.js — so the blanket
+     rule made a 13x44 sliver that is no easier to hit and pushed the alert-rule
+     and user rows to 87px. Square it off; !important is the only way past inline. */
+  input[type=checkbox],input[type=radio]{min-height:0;width:22px!important;height:22px}
+  /* the header selects carry inline font-size/padding from index.html */
+  #top select{font-size:16px!important;padding:6px 7px!important}
+  th{padding:14px 10px}          /* sortable header = a tap target, 40px -> 44px */
+  #nav a{padding:12px 18px}      /* drawer links were 39px */
+  .tabs a{padding:13px 14px}
+  .agrp>summary,.asum{padding:11px 4px}
+  /* The wall is TV-first, but it is reachable from a phone: let the head wrap
+     instead of clipping the controls, and drop the hover-only fade (no hover). */
+  #wallhead{flex-wrap:wrap;gap:10px 14px;padding:10px 14px}
+  /* 5x44px buttons + the interval select is 325px and will not fit a 320px
+     screen; body.wall hides the sidebar and header, so the ✕ that hangs off the
+     edge is the only way back out. Wrap it. */
+  #wallhead .wctl{opacity:1;flex-wrap:wrap;justify-content:flex-end}
+  #wallhead h2{font-size:19px} #wallhead .wclock{font-size:22px}
+  .wkpi{padding:13px 15px} .wkpi .v{font-size:32px;letter-spacing:-.5px}   /* 52px clipped "20/26" in a 148px card */
 }
-@media (max-width:560px){
+/* Header compaction. Two rows in portrait, one in landscape, never three: with
+   44px controls the sticky header was taking 260px of an 812px screen and 185px
+   of a 375px-tall landscape one. `order` rebuilds the rows without touching the
+   markup. The refresh interval is a set-once preference that survives in
+   localStorage — it is the one control worth spending no header row on. */
+@media (max-width:560px),(max-width:900px) and (max-height:520px){
+  #top{gap:8px 10px}
   #top .pill{display:none}
   #top .pill.live{display:inline-flex}
+  #top .spacer,#top #refreshsel{display:none}
+  #burger{order:0}
+  #top h1{order:1;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #installbtn,#soundbtn{order:2}
+  #top .pill.live{order:3}
+  #langsel{order:4}
+  #critbar{flex-wrap:wrap;gap:8px 10px;padding:9px 12px}
+  /* "there is room in landscape" only holds at 812: at 568/667/736 the flex:1
+     message was squeezed to 71-127px and read "Laser Machin…". Give it a floor and
+     let it wrap onto a second line — which the 44px buttons already pay for — so
+     the operator always sees WHICH machine stopped. */
+  #critbar .msg{min-width:200px;white-space:normal;overflow:visible;text-overflow:clip}
+}
+@media (max-width:560px){
+  /* The one widget that must never be half-legible: the message was collapsing to
+     width 0 between flex:1 and nowrap, and Silence hung off a 320px screen. Only
+     this narrow — in landscape there is still room for the message inline. */
+  #critbar .msg{flex:0 0 100%;order:9;white-space:normal;overflow:visible;text-overflow:clip}
+  #critbar button{flex:1 1 auto}   /* fill the wrapped row instead of dangling in it */
   .kpis{grid-template-columns:1fr 1fr}
   .wkpis{grid-template-columns:1fr 1fr}
   .wtiles{grid-template-columns:1fr 1fr}

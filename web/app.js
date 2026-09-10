@@ -290,8 +290,14 @@ function heatmap(hm) {
 const PALETTE = ['#3987e5', '#d95926', '#199e70', '#c98500',
                  '#d55181', '#008300', '#9085e9', '#e66767'];
 
+/* viewBox width. 900 is the desktop/TV panel; a phone panel is ~innerWidth-50
+   (view padding + panel padding + border, exactly the <=900px block's numbers), and
+   drawing at that width keeps axis text at its real 10px instead of scaling it to
+   3.6px. 900 stays for desktop and for the wall display on a TV. */
+function chartW() { return innerWidth <= 900 ? Math.max(240, innerWidth - 50) : 900; }
+
 function svgLine(series, opts) {
-  opts = opts || {}; const W = 900, H = opts.height || 210, P = {l: 44, r: 12, t: 12, b: 26};
+  opts = opts || {}; const W = opts.width || chartW(), H = opts.height || 210, P = {l: 44, r: 12, t: 12, b: 26};
   const labels = opts.labels || [];
   const all = series.flatMap(s => s.data).filter(v => v !== null && v !== undefined && !isNaN(v));
   if (!all.length) return `<div class="empty">No data for this period</div>`;
@@ -304,7 +310,7 @@ function svgLine(series, opts) {
   for (let k = 0; k <= 4; k++) { const v = min + (max - min) * k / 4, y = Y(v);
     g += `<line x1="${P.l}" y1="${y}" x2="${W - P.r}" y2="${y}" stroke="var(--line2)" stroke-width="1"/>` +
          `<text x="${P.l - 6}" y="${y + 3}" text-anchor="end">${fmtAxis(v)}</text>`; }
-  const step = Math.ceil(labels.length / 12) || 1;
+  const step = Math.ceil(labels.length / (12 * W / 900)) || 1;
   labels.forEach((l, i) => { if (i % step === 0) g += `<text x="${X(i)}" y="${H - 8}" text-anchor="middle">${esc(l)}</text>`; });
   series.forEach((s, si) => {
     const c = s.color || PALETTE[si % PALETTE.length];
@@ -318,7 +324,7 @@ function svgLine(series, opts) {
 }
 
 function svgBar(labels, series, opts) {
-  opts = opts || {}; const W = 900, H = opts.height || 210, P = {l: 44, r: 12, t: 12, b: opts.rotate ? 62 : 26};
+  opts = opts || {}; const W = opts.width || chartW(), H = opts.height || 210, P = {l: 44, r: 12, t: 12, b: opts.rotate ? 62 : 26};
   const all = series.flatMap(s => s.data).filter(v => v !== null && !isNaN(v));
   if (!all.length) return `<div class="empty">No data for this period</div>`;
   const stacked = !!opts.stacked;
@@ -338,9 +344,9 @@ function svgBar(labels, series, opts) {
       g += `<rect x="${x}" y="${y}" width="${bw - 1}" height="${h}" fill="${c}" rx="2"><title>${esc(l)} ${esc(s.name || '')}: ${fmtAxis(v)}</title></rect>`;
       acc += v;
     });
-    const step = Math.ceil(labels.length / (opts.rotate ? 40 : 14)) || 1;
+    const step = Math.ceil(labels.length / ((opts.rotate ? 40 : 14) * W / 900)) || 1;
     if (i % step === 0) g += opts.rotate
-      ? `<text x="${P.l + i * iw + iw / 2}" y="${H - 12}" text-anchor="end" transform="rotate(-40 ${P.l + i * iw + iw / 2} ${H - 12})">${esc(String(l).slice(0, 22))}</text>`
+      ? `<text x="${P.l + i * iw + iw / 2}" y="${H - 12}" text-anchor="end" transform="rotate(-40 ${P.l + i * iw + iw / 2} ${H - 12})">${esc(String(l).slice(0, Math.max(10, Math.round(22 * W / 900))))}</text>`
       : `<text x="${P.l + i * iw + iw / 2}" y="${H - 8}" text-anchor="middle">${esc(l)}</text>`;
   });
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">${g}</svg>` + legend(series);
@@ -1687,7 +1693,7 @@ function showModal(title, body, actions) {
     };
     foot.appendChild(b);
   });
-  const c = el('<button>Close</button>'); c.onclick = closeModal; foot.appendChild(c);
+  const c = el(`<button>${esc(t('laser.btn.close'))}</button>`); c.onclick = closeModal; foot.appendChild(c);
   m.onclick = e => { if (e.target === m) closeModal(); };
   document.body.appendChild(m);
 }
@@ -1734,7 +1740,32 @@ function start() {
   setInterval(() => { if (!document.hidden) tick(); }, 20000);
 }
 
+document.addEventListener('click', e => {
+  if (document.body.classList.contains('navopen') && !e.target.closest('#side,#burger'))
+    document.body.classList.remove('navopen');
+});
+
 window.addEventListener('hashchange', route);
+
+/* A chart's viewBox is baked from chartW() at paint time, so rotating the phone
+   leaves a 762-wide chart inside a 325px panel at 0.43 scale with 6px axis text —
+   the exact letterboxing the mobile widths exist to remove. It only heals at the
+   next auto-refresh, and never when auto-refresh is off (which is what a phone
+   gets: #refreshsel is hidden below 560px). Repaint on a real width change only —
+   a soft keyboard or a collapsing URL bar moves innerHeight, not innerWidth.
+   Not refreshBlocked(): document.hidden must not veto a LAYOUT repaint (a tab is
+   resized precisely while it is not being looked at), and a focused field is the
+   only thing route() would actually destroy. */
+let LASTCW = chartW(), RESIZET;
+addEventListener('resize', () => {
+  if (chartW() === LASTCW) return;
+  LASTCW = chartW();
+  clearTimeout(RESIZET);
+  RESIZET = setTimeout(() => {
+    if (!document.querySelector('#view input:focus, #view select:focus, #view textarea:focus')) route();
+  }, 250);
+});
+
 (async () => {
   await initI18n();
   try { ME = await get('/auth/me'); start(); } catch (e) { showLogin(); }

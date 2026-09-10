@@ -6,6 +6,18 @@
 <title>T&C Laser Intelligence &amp; Command Center</title>
 <link rel="stylesheet" href="/static/style.css?v=20">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎯</text></svg>">
+<link rel="manifest" href="/manifest.webmanifest?v=20">
+<meta name="theme-color" content="#070d18">
+<!-- iOS ignores the manifest: it needs its own icon and its own standalone flags -->
+<link rel="apple-touch-icon" href="/static/icons/icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<!-- "black", not "black-translucent": translucent lays the page out from y=0 and the
+     iOS clock/battery then sit on top of the sticky #top header. Nothing here sets
+     viewport-fit=cover or env(safe-area-inset-top), so there is no padding to hide
+     behind — and against --bg #070d18 an opaque black bar is indistinguishable anyway. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="T&amp;C Laser">
 </head>
 <body>
 
@@ -48,7 +60,8 @@
         <span class="pill live"><span class="dot"></span><span id="pill-live">&mdash;</span></span>
         <span class="pill" id="pill-alerts">&mdash;</span>
         <span class="pill" id="pill-clock">&mdash;</span>
-        <select id="langsel" title="Language" onchange="setLang(this.value)"
+        <button class="iconbtn" id="installbtn" hidden>⤓</button>
+        <select id="langsel" title="Language" onchange="setLang(this.value).then(syncInstall)"
                 style="width:auto;padding:5px 8px;font-size:11.5px"></select>
         <select id="refreshsel" title="Auto-refresh interval" onchange="setRefresh(this.value)"
                 style="width:auto;padding:5px 8px;font-size:11.5px"></select>
@@ -61,5 +74,41 @@
 
 <script src="/static/app.js?v=20"></script>
 <script src="/static/wall.js?v=20"></script>
+
+<script>
+/* The worker's version rides on the app.js tag's ?v=, so the single bump in this
+   file invalidates the shell, the assets and the service worker together.
+   Optional chaining, not a try/catch: on the plain-HTTP factory LAN
+   navigator.serviceWorker is undefined, and this has to be a silent no-op there. */
+navigator.serviceWorker?.register(
+  '/sw.js' + new URL(document.querySelector('script[src*="app.js"]').src).search
+).catch(() => {});
+
+/* Install affordance. 'onbeforeinstallprompt' in window is true even on plain HTTP
+   where install can never work, so the button is gated on the event actually
+   firing — never on a feature probe. */
+const ibtn = document.getElementById('installbtn');
+let installPrompt = null;
+/* t() returns the raw key until the catalogue has loaded, and this can fire before
+   that; degrade to English rather than to "laser.pwa.install". */
+const tp = (k, en) => { const v = window.t ? t(k) : ''; return v.slice(0, 6) === 'laser.' ? en : v || en; };
+/* called by the language select too — nothing in app.js re-renders the header */
+function syncInstall() { ibtn.title = ibtn.ariaLabel = tp('laser.pwa.install', 'Install app'); }
+addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();          // keep the event so the user can install from our own button
+  installPrompt = e;
+  syncInstall();
+  ibtn.hidden = false;
+});
+ibtn.onclick = async () => {
+  ibtn.hidden = true;          // the prompt is single-use whatever the user answers
+  await installPrompt?.prompt();
+  installPrompt = null;
+};
+addEventListener('appinstalled', () => {
+  ibtn.hidden = true;
+  window.toast?.(tp('laser.pwa.installed', 'App installed'), 'ok');
+});
+</script>
 </body>
 </html>

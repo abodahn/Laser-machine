@@ -588,5 +588,7 @@
   "laser.kpi.critical_open": "Critical open",
   "laser.sub.unacknowledged": "unacknowledged",
   "laser.sub.being_handled": "being handled",
-  "laser.msg.handled": "Handled"
+  "laser.msg.handled": "Handled",
+  "laser.pwa.install": "Install app",
+  "laser.pwa.installed": "App installed"
 }

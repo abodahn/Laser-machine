@@ -588,5 +588,7 @@
   "laser.kpi.critical_open": "Açık kritik",
   "laser.sub.unacknowledged": "onaylanmamış",
   "laser.sub.being_handled": "işleniyor",
-  "laser.msg.handled": "Giderildi"
+  "laser.msg.handled": "Giderildi",
+  "laser.pwa.install": "Uygulamayı yükle",
+  "laser.pwa.installed": "Uygulama yüklendi"
 }

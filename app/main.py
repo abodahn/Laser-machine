@@ -274,6 +274,18 @@ async def readonly_mirror(request, call_next):
     return await call_next(request)
 
 
+# The UI now installs to personal phones, so authenticated JSON must not be written to
+# the browser's on-disk HTTP cache, where it would outlive sign-out. The service worker
+# already refuses to touch /api; this closes the same hole one layer down. FastAPI sets
+# no Cache-Control of its own, and Chrome stores an uncacheable-looking body anyway.
+@app.middleware("http")
+async def no_store_api(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.get("/health")
 def healthz():
     return {"ok": True, "time": db.now()}
@@ -287,6 +299,32 @@ SHELL_HEADERS = {"Cache-Control": "no-cache, no-store, must-revalidate"}
 @app.get("/")
 def index():
     return FileResponse(config.WEB / "index.html", headers=SHELL_HEADERS)
+
+
+# "no-cache" WITHOUT "no-store": the browser must revalidate the worker on every
+# update check, but it still has to be allowed to store the response. Chrome
+# refuses to register a worker whose script came back no-store, failing with a
+# bare "An unknown error occurred when fetching the script" that says nothing
+# about the header — the script fetches fine on its own, so it looks like the
+# worker is simply broken. SHELL_HEADERS here meant the PWA never installed.
+SW_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
+
+
+# Both must sit at the root, above /{page}, and both must be declared here: the
+# catch-all would otherwise hand back index.html as text/html, and registration
+# dies with "unsupported MIME type". Root path is also what gives the worker
+# scope "/". Explicit media types because .js/.webmanifest resolve through the
+# Windows registry via mimetypes and cannot be trusted.
+@app.get("/sw.js")
+def service_worker():
+    return FileResponse(config.WEB / "sw.js", media_type="text/javascript",
+                        headers=SW_HEADERS)
+
+
+@app.get("/manifest.webmanifest")
+def manifest():
+    return FileResponse(config.WEB / "manifest.webmanifest",
+                        media_type="application/manifest+json", headers=SW_HEADERS)
 
 
 @app.get("/{page}")

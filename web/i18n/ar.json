@@ -588,5 +588,7 @@
   "laser.kpi.critical_open": "حرجة مفتوحة",
   "laser.sub.unacknowledged": "غير مُقرَّة",
   "laser.sub.being_handled": "قيد المعالجة",
-  "laser.msg.handled": "تمت المعالجة"
+  "laser.msg.handled": "تمت المعالجة",
+  "laser.pwa.install": "تثبيت التطبيق",
+  "laser.pwa.installed": "تم تثبيت التطبيق"
 }
