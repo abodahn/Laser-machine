@@ -80,7 +80,7 @@ let STRINGS = {};
 async function loadLang(code) {
   if (!LANGS[code]) code = 'en';
   try {
-    const r = await fetch(`/static/i18n/${code}.json?v=20`);
+    const r = await fetch(`/static/i18n/${code}.json?v=21`);
     STRINGS = r.ok ? await r.json() : {};
   } catch (e) { STRINGS = {}; }
   LANG = code;
@@ -108,7 +108,7 @@ function t(key, vars) {
 let EN_FALLBACK = {};
 async function initI18n() {
   try {
-    const r = await fetch('/static/i18n/en.json?v=20');
+    const r = await fetch('/static/i18n/en.json?v=21');
     EN_FALLBACK = r.ok ? await r.json() : {};
   } catch (e) { EN_FALLBACK = {}; }
   await loadLang(LANG);

@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>T&C Laser Intelligence &amp; Command Center</title>
-<link rel="stylesheet" href="/static/style.css?v=20">
+<link rel="stylesheet" href="/static/style.css?v=21">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎯</text></svg>">
-<link rel="manifest" href="/manifest.webmanifest?v=20">
+<link rel="manifest" href="/manifest.webmanifest?v=21">
 <meta name="theme-color" content="#070d18">
 <!-- iOS ignores the manifest: it needs its own icon and its own standalone flags -->
 <link rel="apple-touch-icon" href="/static/icons/icon-180.png">
@@ -60,7 +60,7 @@
         <span class="pill live"><span class="dot"></span><span id="pill-live">&mdash;</span></span>
         <span class="pill" id="pill-alerts">&mdash;</span>
         <span class="pill" id="pill-clock">&mdash;</span>
-        <button class="iconbtn" id="installbtn" hidden>⤓</button>
+        <button class="iconbtn" id="installbtn">📲</button>
         <select id="langsel" title="Language" onchange="setLang(this.value).then(syncInstall)"
                 style="width:auto;padding:5px 8px;font-size:11.5px"></select>
         <select id="refreshsel" title="Auto-refresh interval" onchange="setRefresh(this.value)"
@@ -72,8 +72,8 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=20"></script>
-<script src="/static/wall.js?v=20"></script>
+<script src="/static/app.js?v=21"></script>
+<script src="/static/wall.js?v=21"></script>
 
 <script>
 /* The worker's version rides on the app.js tag's ?v=, so the single bump in this
@@ -84,28 +84,72 @@ navigator.serviceWorker?.register(
   '/sw.js' + new URL(document.querySelector('script[src*="app.js"]').src).search
 ).catch(() => {});
 
-/* Install affordance. 'onbeforeinstallprompt' in window is true even on plain HTTP
-   where install can never work, so the button is gated on the event actually
-   firing — never on a feature probe. */
+/* Install affordance.
+
+   The button used to be revealed only by beforeinstallprompt. That event is a
+   Chromium thing: iOS Safari never fires it, so on an iPhone — half the phones on
+   the floor — the button simply never appeared and there was no way to install and
+   no explanation either. Same on the plain-HTTP LAN address, where install can
+   never work at all.
+
+   So the button is always offered, and the CLICK decides what can actually be done
+   here. Only two states hide it: already running as an installed app, and a
+   just-completed install. */
 const ibtn = document.getElementById('installbtn');
 let installPrompt = null;
+
 /* t() returns the raw key until the catalogue has loaded, and this can fire before
    that; degrade to English rather than to "laser.pwa.install". */
 const tp = (k, en) => { const v = window.t ? t(k) : ''; return v.slice(0, 6) === 'laser.' ? en : v || en; };
+
+const standalone = () => matchMedia('(display-mode: standalone)').matches ||
+                         navigator.standalone === true;
+/* iPadOS 13+ reports itself as a Mac; the touch-point count is what separates them. */
+const isIOS = () => /iphone|ipod|ipad/i.test(navigator.userAgent) ||
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 /* called by the language select too — nothing in app.js re-renders the header */
-function syncInstall() { ibtn.title = ibtn.ariaLabel = tp('laser.pwa.install', 'Install app'); }
+function syncInstall() {
+  ibtn.title = ibtn.ariaLabel = tp('laser.pwa.install', 'Install app');
+  ibtn.hidden = standalone();
+}
+syncInstall();
+
 addEventListener('beforeinstallprompt', e => {
   e.preventDefault();          // keep the event so the user can install from our own button
   installPrompt = e;
   syncInstall();
-  ibtn.hidden = false;
 });
+
+function installHelp(bodyHtml) {
+  if (window.showModal) showModal(tp('laser.pwa.how', 'Install on this device'), bodyHtml, '');
+  else alert(bodyHtml.replace(/<[^>]+>/g, ' '));
+}
+
 ibtn.onclick = async () => {
-  ibtn.hidden = true;          // the prompt is single-use whatever the user answers
-  await installPrompt?.prompt();
-  installPrompt = null;
+  if (installPrompt) {                      // Chrome/Edge: the real thing
+    ibtn.hidden = true;                     // the prompt is single-use whatever the answer
+    await installPrompt.prompt();
+    installPrompt = null;
+    return;
+  }
+  /* No prompt available. Say why, and what to do instead, rather than doing nothing.
+     isSecureContext is the honest test: install is impossible over plain HTTP however
+     good the manifest is. */
+  if (!window.isSecureContext) {
+    installHelp(`<p>${tp('laser.pwa.http',
+      'Installing needs the secure online address (https). The local factory address cannot install an app — open the online link on this device and install from there.')}</p>`);
+  } else if (isIOS()) {
+    installHelp(`<p>${tp('laser.pwa.ios',
+      'On iPhone and iPad: tap the Share button in Safari, then choose "Add to Home Screen".')}</p>`);
+  } else {
+    installHelp(`<p>${tp('laser.pwa.generic',
+      'Open your browser menu and choose "Install app" or "Add to Home screen". If you do not see it, the app may already be installed.')}</p>`);
+  }
 };
+
 addEventListener('appinstalled', () => {
+  installPrompt = null;
   ibtn.hidden = true;
   window.toast?.(tp('laser.pwa.installed', 'App installed'), 'ok');
 });
